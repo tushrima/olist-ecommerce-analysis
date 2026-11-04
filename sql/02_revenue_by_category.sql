@@ -1,13 +1,19 @@
-SELECT 
-    CASE 
-        WHEN julianday(o.order_delivered_customer_date) - julianday(o.order_estimated_delivery_date) <= 0 THEN 'On time or early'
-        WHEN julianday(o.order_delivered_customer_date) - julianday(o.order_estimated_delivery_date) <= 3 THEN '1-3 days late'
-        ELSE 'More than 3 days late'
-    END AS delivery_status,
-    COUNT(*) AS num_orders,
-    ROUND(AVG(r.review_score), 2) AS avg_review_score
-FROM orders o
-JOIN order_reviews r ON o.order_id = r.order_id
-WHERE o.order_delivered_customer_date IS NOT NULL
-GROUP BY delivery_status
-ORDER BY avg_review_score DESC;
+-- Product revenue is the sum of item prices, excluding freight.
+-- An order may contain items in multiple categories; category order counts
+-- therefore should not be added together to calculate total unique orders.
+SELECT
+    COALESCE(t.product_category_name_english,
+             p.product_category_name,
+             'unknown') AS category,
+    COUNT(*) AS items_sold,
+    COUNT(DISTINCT oi.order_id) AS distinct_orders,
+    ROUND(SUM(oi.price), 2) AS product_revenue_brl,
+    ROUND(AVG(oi.price), 2) AS avg_item_price_brl
+FROM order_items AS oi
+JOIN orders AS o ON o.order_id = oi.order_id
+JOIN products AS p ON p.product_id = oi.product_id
+LEFT JOIN product_category_name_translation AS t
+    ON t.product_category_name = p.product_category_name
+WHERE o.order_status = 'delivered'
+GROUP BY category
+ORDER BY product_revenue_brl DESC;
